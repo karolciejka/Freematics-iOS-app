@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Title</key>
+			<string>Display</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>Dial</string>
+			<key>Key</key>
+			<string>rpmStyle</string>
+			<key>Title</key>
+			<string>Engine speed</string>
+			<key>Titles</key>
+			<array>
+				<string>Dial</string>
+				<string>Bar</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>Dial</string>
+				<string>Bar</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>Metric</string>
+			<key>Key</key>
+			<string>units</string>
+			<key>Title</key>
+			<string>Units</string>
+			<key>Titles</key>
+			<array>
+				<string>Metric</string>
+				<string>Imperial</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>Metric</string>
+				<string>Imperial</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Title</key>
+			<string>Demo data</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>Parked</string>
+			<key>Key</key>
+			<string>demoMode</string>
+			<key>Title</key>
+			<string>Simulated car</string>
+			<key>Titles</key>
+			<array>
+				<string>Parked</string>
+				<string>Driving</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>Parked</string>
+				<string>Driving</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
