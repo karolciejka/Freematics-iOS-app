@@ -4,7 +4,7 @@ import XCTest
 final class ParsingTests: XCTestCase {
 
     func testDecodeMode01() {
-        XCTAssertEqual(OBDParse.decode(pid: 0x0C, [0x0C, 0x34]), 780.25)
+        XCTAssertEqual(OBDParse.decode(pid: 0x0C, [0x0C, 0x34]), 781)
         XCTAssertEqual(OBDParse.decode(pid: 0x0D, [0x48]), 72)
         XCTAssertEqual(OBDParse.decode(pid: 0x05, [0x7B]), 83)
         XCTAssertEqual(OBDParse.decode(pid: 0x0E, [0x90]), 8)
@@ -16,7 +16,7 @@ final class ParsingTests: XCTestCase {
     func testPidsReply() {
         // order of Channel.polled: rpm, speed, load, throttle, coolant, iat, timing, fuelRate
         let r = LiveDecode.readings("0C34,00,36,,7B,40,90,")
-        XCTAssertEqual(r?[.rpm], 780.25)
+        XCTAssertEqual(r?[.rpm], 781)
         XCTAssertEqual(r?[.speed], 0)
         XCTAssertNil(r?[.throttle])
         XCTAssertEqual(r?[.coolant], 83)
