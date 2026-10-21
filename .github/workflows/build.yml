@@ -19,7 +19,14 @@ jobs:
         run: swift --version
       - name: Run tests
         working-directory: OBDCore
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee test.log || {
+            # surface failures as an annotation so they're readable without the raw log
+            msg=$(grep -E "error:|failed|XCTAssert" test.log | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=OBDCore tests failed::$msg"
+            exit 1
+          }
 
   app:
     name: App (iOS Simulator)
@@ -39,7 +46,13 @@ jobs:
             -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO \
             | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
-          grep -q "BUILD SUCCEEDED" build.log
+          warn=$(grep -E "warning:" build.log | grep -v "/DerivedData/" | sort -u | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          [ -n "$warn" ] && echo "::warning title=Compiler warnings::$warn"
+          if ! grep -q "BUILD SUCCEEDED" build.log; then
+            err=$(grep -E "error:" build.log | sort -u | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Build failed::$err"
+            exit 1
+          fi
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
