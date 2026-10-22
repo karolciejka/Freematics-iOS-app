@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to App Store Connect
+      - name: Sign for App Store
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -68,7 +68,7 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
+            <key>destination</key><string>export</string>
             <key>teamID</key><string>$TEAM_ID</string>
             <key>signingStyle</key><string>automatic</string>
             <key>uploadSymbols</key><true/>
@@ -84,17 +84,32 @@ jobs:
             -authenticationKeyPath "$KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee export.log | grep -E "error|Upload succeeded|EXPORT (SUCCEEDED|FAILED)" || true
+            2>&1 | tee export.log | grep -E "error|EXPORT (SUCCEEDED|FAILED)" || true
           if ! grep -q "EXPORT SUCCEEDED" export.log; then
-            err=$(grep -iE "error" export.log | sort -u | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            err=$(tail -40 export.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Signing failed::$err"
+            exit 1
+          fi
+          ls -l "$RUNNER_TEMP/export"
+
+      - name: Upload to App Store Connect
+        run: |
+          # altool looks for the key as ~/.appstoreconnect/private_keys/AuthKey_<id>.p8
+          mkdir -p ~/.appstoreconnect/private_keys
+          cp "$KEY_PATH" ~/.appstoreconnect/private_keys/
+          ipa=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
+          if ! xcrun altool --upload-app --type ios --file "$ipa" \
+                 --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > upload.log 2>&1; then
+            err=$(tail -40 upload.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=Upload failed::$err"
             exit 1
           fi
+          tail -5 upload.log
           echo "::notice title=Uploaded::Build $BUILD_NUMBER is processing in App Store Connect. It appears under TestFlight in 5-15 minutes."
 
       - name: Remove API key
         if: always()
-        run: rm -rf "$RUNNER_TEMP/keys"
+        run: rm -rf "$RUNNER_TEMP/keys" ~/.appstoreconnect/private_keys
 
       - name: Upload logs
         if: always()
@@ -104,4 +119,5 @@ jobs:
           path: |
             archive.log
             export.log
+            upload.log
           if-no-files-found: ignore
