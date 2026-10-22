@@ -98,12 +98,25 @@ jobs:
           mkdir -p ~/.appstoreconnect/private_keys
           cp "$KEY_PATH" ~/.appstoreconnect/private_keys/
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
-          if ! xcrun altool --upload-app --type ios --file "$ipa" \
+          # Apple's upload service sometimes answers 5xx; retry those with a pause.
+          for attempt in 1 2 3 4; do
+            if xcrun altool --upload-app --type ios --file "$ipa" \
                  --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > upload.log 2>&1; then
-            err=$(tail -40 upload.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+              break
+            fi
+            if grep -qiE "already been uploaded|DUPLICATE" upload.log; then
+              echo "Build $BUILD_NUMBER was already uploaded by an earlier attempt."
+              break
+            fi
+            if [ $attempt -lt 4 ] && grep -qE "Status Code: 5[0-9][0-9]|timed out|network" upload.log; then
+              echo "Attempt $attempt failed with a server error; retrying in $((attempt * 60)) s"
+              sleep $((attempt * 60))
+              continue
+            fi
+            err=$(grep -vE "^\s*$|<|NSLocalized" upload.log | tail -30 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=Upload failed::$err"
             exit 1
-          fi
+          done
           tail -5 upload.log
           echo "::notice title=Uploaded::Build $BUILD_NUMBER is processing in App Store Connect. It appears under TestFlight in 5-15 minutes."
 
