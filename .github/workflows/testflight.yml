@@ -12,7 +12,7 @@ concurrency:
 jobs:
   upload:
     name: Archive and upload to TestFlight
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -21,6 +21,10 @@ jobs:
       BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Xcode version
+        # App Store Connect only accepts builds made with the current major Xcode/SDK
+        run: xcodebuild -version && xcodebuild -showsdks | grep -i iphoneos
 
       - name: Check secrets
         run: |
