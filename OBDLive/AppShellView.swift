@@ -37,7 +37,7 @@ struct AppShellView: View {
 
     private var linkLabel: String {
         if model.paused { return "Paused" }
-        if model.source == .demo { return "25 Hz" }
+        if model.source == .demo { return "Demo · 25 Hz" }
         return model.rateHz > 0 ? LiveDecode.rateLabel(model.rateHz) : "No ECU"
     }
 
@@ -45,6 +45,9 @@ struct AppShellView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Kicker(text: model.vehicleLabel, color: DS.accent700, tracking: 0.1)
+                Kicker(text: model.vin.map { "VIN \($0)" } ?? "VIN not reported")
+                    .monospacedDigit()
+                    .textSelection(.enabled)
                 Text(title)
                     .font(DS.heading(32))
                     .tracking(-0.48)
@@ -55,7 +58,7 @@ struct AppShellView: View {
                     Rectangle()
                         .fill(model.paused || (model.source == .device && model.rateHz == 0) ? DS.neutral500 : DS.accent)
                         .frame(width: 6, height: 6)
-                    Text("ONE+ · \(linkLabel)")
+                    Text(model.source == .demo ? linkLabel : "ONE+ · \(linkLabel)")
                         .font(DS.body(11))
                         .monospacedDigit()
                 }

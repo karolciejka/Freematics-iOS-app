@@ -158,6 +158,20 @@ enum OBDParse {
         let v = reply.trimmingCharacters(in: .whitespaces).uppercased()
         return v.count == 17 && v.allSatisfy({ $0.isLetter || $0.isNumber }) ? v : nil
     }
+
+    /// VIN from a mode 09 PID 02 reply: one multi-frame CAN message (`49 02 01` + 17 ASCII bytes),
+    /// or on ISO 9141 / KWP five numbered lines of four bytes each.
+    static func vinFromMode09(_ reply: String) -> String? {
+        let msgs = messages(reply).filter { $0.count >= 3 && $0[0] == 0x49 && $0[1] == 0x02 }
+        var bytes: [UInt8]
+        if let can = msgs.first(where: { $0.count >= 20 }) {
+            bytes = Array(can[3...])
+        } else {
+            bytes = msgs.sorted { $0[2] < $1[2] }.flatMap { $0[3...] }
+        }
+        bytes = bytes.filter { $0 >= 0x30 && $0 < 0x7F }
+        return vin(String(decoding: bytes.suffix(17), as: UTF8.self))
+    }
 }
 
 struct Monitor: Equatable {
@@ -171,8 +185,9 @@ struct MonitorStatus: Equatable {
     let monitors: [Monitor]
 }
 
-/// Model year and make from a VIN, for the header kicker.
+/// Model year, make and (for VW-group cars) model from a VIN, for the header.
 enum VINInfo {
+    /// Model year from VIN position 10, resolved to the most recent matching year.
     static func modelYear(_ vin: String, currentYear: Int) -> Int? {
         let codes = Array("ABCDEFGHJKLMNPRSTVWXY123456789")
         let chars = Array(vin)
@@ -188,6 +203,20 @@ enum VINInfo {
         return wmis[String(vin.prefix(2))]
     }
 
+    /// VW-group VINs carry a model code in positions 7–8 (e.g. WVWZZZ6RZ… = Polo); other makes don't follow a common scheme.
+    static func model(_ vin: String) -> String? {
+        guard vin.count == 17, let make = make(vin), let table = vwGroupModels[make] else { return nil }
+        let chars = Array(vin)
+        return table[String(chars[6...7])]
+    }
+
+    /// e.g. "2012 Volkswagen Polo"; falls back to whatever parts are known, or "OBD-II".
+    static func vehicle(vin: String?, currentYear: Int) -> String {
+        guard let vin else { return "OBD-II" }
+        let parts = [modelYear(vin, currentYear: currentYear).map { String($0) }, make(vin), model(vin)].compactMap { $0 }
+        return parts.isEmpty ? "OBD-II" : parts.joined(separator: " ")
+    }
+
     private static let wmis: [String: String] = [
         "WVW": "Volkswagen", "WV1": "Volkswagen", "WV2": "Volkswagen", "1VW": "Volkswagen", "3VW": "Volkswagen",
         "WAU": "Audi", "WUA": "Audi", "TRU": "Audi", "WBA": "BMW", "WBS": "BMW", "WBY": "BMW", "WMW": "Mini",
@@ -200,11 +229,24 @@ enum VINInfo {
         "4T1": "Toyota", "5YF": "Toyota", "1HG": "Honda", "SJN": "Nissan", "TMA": "Hyundai", "U5Y": "Kia",
     ]
 
-    /// e.g. "2019 Volkswagen · VIN …4821"
-    static func kicker(vin: String?, currentYear: Int) -> String {
-        guard let vin else { return "OBD-II · VIN unavailable" }
-        let parts = [modelYear(vin, currentYear: currentYear).map { String($0) }, make(vin)].compactMap { $0 }
-        let head = parts.isEmpty ? "OBD-II" : parts.joined(separator: " ")
-        return "\(head) · VIN …\(vin.suffix(4))"
-    }
+    private static let vwGroupModels: [String: [String: String]] = [
+        "Volkswagen": [
+            "9N": "Polo", "6R": "Polo", "6C": "Polo", "AW": "Polo", "AA": "up!", "1J": "Golf", "1K": "Golf", "5K": "Golf",
+            "AU": "Golf", "CD": "Golf", "5M": "Golf Plus", "AM": "Golf Sportsvan", "16": "Jetta", "BU": "Jetta",
+            "3C": "Passat", "3G": "Passat", "35": "Passat CC", "3H": "Arteon", "13": "Scirocco", "5C": "Beetle", "1Q": "Eos",
+            "5N": "Tiguan", "AD": "Tiguan", "A1": "T-Roc", "C1": "T-Cross", "7P": "Touareg", "CR": "Touareg",
+            "1T": "Touran", "5T": "Touran", "7N": "Sharan", "2K": "Caddy", "7H": "Transporter", "7J": "Transporter",
+            "E1": "ID.3", "E2": "ID.4",
+        ],
+        "Audi": [
+            "8X": "A1", "GB": "A1", "8P": "A3", "8V": "A3", "8Y": "A3", "8K": "A4", "8W": "A4", "8T": "A5", "F5": "A5",
+            "4F": "A6", "4G": "A6", "4K": "A6", "4H": "A8", "8U": "Q3", "F3": "Q3", "8R": "Q5", "FY": "Q5",
+            "4L": "Q7", "4M": "Q7", "8J": "TT", "FV": "TT",
+        ],
+        "Škoda": [
+            "5J": "Fabia", "NJ": "Fabia", "AA": "Citigo", "NH": "Rapid", "NW": "Scala", "1Z": "Octavia", "5E": "Octavia",
+            "NX": "Octavia", "3T": "Superb", "3V": "Superb", "5L": "Yeti", "NU": "Karoq", "NS": "Kodiaq",
+        ],
+        "Seat": ["6J": "Ibiza", "KJ": "Ibiza", "1P": "León", "5F": "León", "KL": "León", "5P": "Altea"],
+    ]
 }

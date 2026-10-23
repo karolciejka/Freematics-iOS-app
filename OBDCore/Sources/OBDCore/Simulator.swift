@@ -103,7 +103,7 @@ struct DemoSimulator {
 
 /// Fixed content for demo mode, as in the design.
 enum DemoData {
-    static let vehicle = "2019 Golf 1.5 TSI · ISO 15765-4"
+    static let vin = "WVWZZZAUZKW124821"
 
     private static func fields(_ pairs: [(String, String)]) -> [FreezeField] {
         pairs.map { FreezeField(k: $0.0, v: $0.1) }
@@ -147,6 +147,6 @@ enum DemoData {
 
     static let connectLog: [(String, String)] = [
         ("ATZ", "ELM327 v1.5 (ONE+ coprocessor)"), ("ATE0", "OK"), ("ATSP0", "OK · auto protocol"), ("0100", "SEARCHING…"),
-        ("", "ISO 15765-4 CAN 11 bit 500k"), ("0902", "VIN WVWZZZAUZKW…4821"),
+        ("", "ISO 15765-4 CAN 11 bit 500k"), ("0902", "VIN \(vin)"),
     ]
 }

@@ -84,8 +84,27 @@ final class ParsingTests: XCTestCase {
         XCTAssertNil(OBDParse.vin("N/A"))
         XCTAssertEqual(VINInfo.modelYear("WVWZZZAUZKW124821", currentYear: 2026), 2019)
         XCTAssertEqual(VINInfo.modelYear("WVWZZZAUZ7W124821", currentYear: 2026), 2007)
-        XCTAssertEqual(VINInfo.kicker(vin: "WVWZZZAUZKW124821", currentYear: 2026), "2019 Volkswagen · VIN …4821")
-        XCTAssertEqual(VINInfo.kicker(vin: nil, currentYear: 2026), "OBD-II · VIN unavailable")
+        XCTAssertEqual(VINInfo.vehicle(vin: "WVWZZZAUZKW124821", currentYear: 2026), "2019 Volkswagen Golf")
+        XCTAssertEqual(VINInfo.vehicle(vin: nil, currentYear: 2026), "OBD-II")
+    }
+
+    func testVehicleFromVIN() {
+        XCTAssertEqual(VINInfo.vehicle(vin: "WVWZZZ6RZCY123456", currentYear: 2026), "2012 Volkswagen Polo")
+        XCTAssertEqual(VINInfo.vehicle(vin: "WAUZZZ8V0FA000001", currentYear: 2026), "2015 Audi A3")
+        XCTAssertEqual(VINInfo.vehicle(vin: "TMBJJ7NE0K0000001", currentYear: 2026), "2019 Škoda")
+        XCTAssertEqual(VINInfo.vehicle(vin: "5YJ3E1EA7KF000001", currentYear: 2026), "2019 Tesla")
+        XCTAssertEqual(VINInfo.vehicle(vin: "WVWZZZ6RZZY123456", currentYear: 2026), "Volkswagen Polo")
+        XCTAssertNil(VINInfo.model("WBA3A5C50CF000001"))
+    }
+
+    func testVINFromMode09() {
+        let can = "0902;014;0:490201575657;1:5A5A5A36525A43;2:59313233343536"
+        XCTAssertEqual(OBDParse.vinFromMode09(can), "WVWZZZ6RZCY123456")
+        // ISO 9141 / KWP: numbered lines of four bytes, possibly out of order
+        let lines = "4902035A36525A;49020100000057;49020256575A5A;49020443593132;49020533343536"
+        XCTAssertEqual(OBDParse.vinFromMode09(lines), "WVWZZZ6RZCY123456")
+        XCTAssertNil(OBDParse.vinFromMode09("49020100000057;49020256575A5A"))
+        XCTAssertNil(OBDParse.vinFromMode09("N/A"))
     }
 }
 

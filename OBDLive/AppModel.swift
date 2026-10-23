@@ -49,7 +49,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var codesNote: String?
     @Published private(set) var codesLoading = false
 
-    @Published private(set) var vehicleLabel = DemoData.vehicle
+    @Published private(set) var vehicleLabel = "OBD-II"
+    @Published private(set) var vin: String?
     @Published private(set) var rateHz: Double = 0
 
     private var timer: Timer?
@@ -137,7 +138,9 @@ final class AppModel: ObservableObject {
             ("ATE0", { $0 ?? "no reply" }),
             ("UPTIME", { r in r.flatMap { Double($0) }.map { "up \(Int($0 / 1000)) s" } ?? (r ?? "no reply") }),
             ("BATT", { r in r.flatMap(OBDParse.battery).map { "\(ReadingFormat.fixed($0, 2)) V" } ?? (r ?? "no reply") }),
-            ("VIN", { r in r.flatMap(OBDParse.vin).map { "VIN \($0)" } ?? "VIN not reported" }),
+            ("VIN", { r in r.flatMap(OBDParse.vin).map { "VIN \($0)" } ?? "VIN not cached by the logger" }),
+            // only sent when the logger had no VIN: ask the car directly (mode 09 PID 02)
+            ("RAW0902", { r in r.flatMap(OBDParse.vinFromMode09).map { "VIN \($0)" } ?? "VIN not reported by the car" }),
             ("RAW0100", { r in
                 guard let r else { return "no reply" }
                 if r == "N/A" { return "OBD not ready · switch the ignition on" }
@@ -148,7 +151,8 @@ final class AppModel: ObservableObject {
         func run(_ i: Int) {
             guard gen == linkGeneration else { return }
             guard i < steps.count else {
-                vehicleLabel = VINInfo.kicker(vin: vin, currentYear: Calendar.current.component(.year, from: Date()))
+                self.vin = vin
+                vehicleLabel = VINInfo.vehicle(vin: vin, currentYear: Calendar.current.component(.year, from: Date()))
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                     guard let self, gen == self.linkGeneration else { return }
                     self.enterApp()
@@ -158,10 +162,12 @@ final class AppModel: ObservableObject {
                 return
             }
             let (cmd, describe) = steps[i]
+            if cmd == "RAW0902" && vin != nil { return run(i + 1) }
             link.send(cmd) { [weak self] reply in
                 guard let self, gen == self.linkGeneration else { return }
                 if cmd == "BATT", let v = reply.flatMap(OBDParse.battery) { self.readings[.volt] = v }
                 if cmd == "VIN" { vin = reply.flatMap(OBDParse.vin) }
+                if cmd == "RAW0902" { vin = reply.flatMap(OBDParse.vinFromMode09) }
                 self.connectLog.append((cmd, describe(reply)))
                 if reply == nil && i == 0 {
                     self.link.disconnect()
@@ -186,7 +192,8 @@ final class AppModel: ObservableObject {
         if source == .demo {
             sim = DemoSimulator()
             readings = sim.readings
-            vehicleLabel = DemoData.vehicle
+            vin = DemoData.vin
+            vehicleLabel = VINInfo.vehicle(vin: DemoData.vin, currentYear: Calendar.current.component(.year, from: Date()))
             codes = DemoData.codes
             monitors = DemoData.monitors(cleared: false)
             openCode = "P0420"
