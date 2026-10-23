@@ -90,8 +90,12 @@ struct AppShellView: View {
                                     .foregroundStyle(DS.bg)
                             }
                         }
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(on ? DS.accent : DS.neutral700)
-                        .padding(.horizontal, 16)
+                        // labels are flush left, so a short trailing inset leaves room for a two-digit badge
+                        .padding(.leading, 16)
+                        .padding(.trailing, 4)
                         .padding(.vertical, 12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .overlay(alignment: .top) {

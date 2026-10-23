@@ -155,6 +155,14 @@ final class SimulatorTests: XCTestCase {
         XCTAssertGreaterThan(sim.readings.gear, 0)
     }
 
+    func testDemoCodes() {
+        let codes = DemoData.codes
+        XCTAssertEqual(codes.count, 12)
+        XCTAssertEqual(Set(codes.map(\.code)).count, codes.count)
+        XCTAssertEqual(codes.first?.code, "P0420")
+        XCTAssertTrue(codes.contains { $0.status == .pending })
+    }
+
     func testFramesIncludeOBDPair() {
         var sim = DemoSimulator()
         sim.random = { 0.9 }
