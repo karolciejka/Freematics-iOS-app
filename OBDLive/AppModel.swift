@@ -52,6 +52,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var vehicleLabel = "OBD-II"
     @Published private(set) var vin: String?
     @Published private(set) var rateHz: Double = 0
+    /// The logger answered N/A and reports standby (`ON?` = 0): its OBD side is powered down.
+    @Published private(set) var loggerAsleep = false
+    /// The BLE link dropped while in the app and is being re-established.
+    @Published private(set) var reconnecting = false
 
     private var timer: Timer?
     private var tickCount = 0
@@ -63,12 +67,17 @@ final class AppModel: ObservableObject {
     private var connectedAt = Date()
     private var frameSeq = 0
     private var linkGeneration = 0
+    private var deviceID: UUID?
 
     init() {
         SettingsKey.registerDefaults()
         link.onDisconnect = { [weak self] error in
             guard let self, self.source == .device else { return }
-            self.reset(error: (error as? LocalizedError)?.errorDescription ?? "Lost connection to the logger.")
+            if self.screen == .app && self.deviceID != nil {
+                self.reconnect(attempt: 1)
+            } else {
+                self.reset(error: (error as? LocalizedError)?.errorDescription ?? "Lost connection to the logger.")
+            }
         }
         let t = Timer(timeInterval: DemoSimulator.tick, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
@@ -105,6 +114,7 @@ final class AppModel: ObservableObject {
         phase = .connecting
         connectLog = []
         connectError = nil
+        deviceID = device.id
         linkGeneration += 1
         let gen = linkGeneration
         link.connect(device.id) { [weak self] result in
@@ -117,8 +127,43 @@ final class AppModel: ObservableObject {
     }
 
     func disconnect() {
+        deviceID = nil
         link.disconnect()
         reset(error: nil)
+    }
+
+    /// The logger restarts when the car is started or after a firmware wake-up; reconnect and carry on
+    /// polling without leaving the app screen. Gives up after three attempts.
+    private func reconnect(attempt: Int) {
+        guard let id = deviceID else { return }
+        linkGeneration += 1
+        let gen = linkGeneration
+        polling = false
+        jobs = []
+        codesLoading = false
+        rateHz = 0
+        reconnecting = true
+        link.connect(id) { [weak self] result in
+            guard let self, gen == self.linkGeneration else { return }
+            switch result {
+            case .success:
+                self.link.send("ATE0") { [weak self] _ in
+                    guard let self, gen == self.linkGeneration else { return }
+                    self.reconnecting = false
+                    self.startPolling(gen)
+                    self.refreshCodes()
+                }
+            case .failure(let e):
+                if attempt < 3 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                        guard let self, gen == self.linkGeneration else { return }
+                        self.reconnect(attempt: attempt + 1)
+                    }
+                } else {
+                    self.reset(error: "Lost connection to the logger. \((e as? LocalizedError)?.errorDescription ?? e.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func reset(error: String?) {
@@ -130,6 +175,8 @@ final class AppModel: ObservableObject {
         polling = false
         jobs = []
         rateHz = 0
+        loggerAsleep = false
+        reconnecting = false
     }
 
     /// Wake the logger and read who we're talking to, logging each exchange on the connect screen.
@@ -277,6 +324,7 @@ final class AppModel: ObservableObject {
                 r[.volt] = self.readings[.volt]
                 r.gear = LiveDecode.estimatedGear(rpm: r[.rpm], speed: r[.speed])
                 self.readings = r
+                self.loggerAsleep = false
                 self.logTraffic(pids: pids, reply: reply)
                 let now = Date()
                 self.pollTimes = Array((self.pollTimes + [now]).suffix(10))
@@ -287,7 +335,12 @@ final class AppModel: ObservableObject {
                 // ignition off / ECU asleep: keep the battery reading, drop stale engine values
                 self.readings = Readings(values: self.readings.values.filter { $0.key == .volt })
                 self.rateHz = 0
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.poll(gen) }
+                // tell "logger in standby" apart from "car not answering"
+                self.link.send("ON?") { [weak self] on in
+                    guard let self, gen == self.linkGeneration else { return }
+                    self.loggerAsleep = on == "0"
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.poll(gen) }
+                }
                 return
             }
             next()
@@ -304,8 +357,10 @@ final class AppModel: ObservableObject {
     /// Sends a RAW request, logs it on the CAN screen and returns the reply.
     private func raw(_ request: String, _ completion: @escaping (String?) -> Void) {
         link.send(FreematicsBLE.raw(request)) { [weak self] reply in
-            if let self, let reply, let req = OBDParse.hexBytes(request) {
-                self.appendTraffic(request: req, replies: OBDParse.messages(reply).filter { $0.first == req[0] | 0x40 })
+            if let self, let req = OBDParse.hexBytes(request) {
+                let replies = reply.map { OBDParse.messages($0).filter { $0.first == req[0] | 0x40 } } ?? []
+                // show why there was no answer (N/A = OBD not ready, NODATA = ECU silent) instead of a bare request
+                self.appendTraffic(request: req, replies: replies, note: replies.isEmpty ? (reply ?? "no reply") : nil)
             }
             completion(reply)
         }
@@ -318,7 +373,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func appendTraffic(request: [UInt8], replies: [[UInt8]]) {
+    private func appendTraffic(request: [UInt8], replies: [[UInt8]], note: String? = nil) {
         guard !paused else { return }
         let ts = String(format: "%07.3f", Date().timeIntervalSince(connectedAt).truncatingRemainder(dividingBy: 1000))
         var rows: [CANFrame] = []
@@ -328,6 +383,10 @@ final class AppModel: ObservableObject {
         }
         row("TX", request)
         for r in replies { row("RX", r) }
+        if let note {
+            frameSeq += 1
+            rows.append(CANFrame(id: frameSeq, ts: ts, canId: "RX", data: note, dlc: "0", obd: true))
+        }
         frames = Array((rows.reversed() + frames).prefix(60))
     }
 

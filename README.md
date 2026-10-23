@@ -40,6 +40,7 @@ What the app sends:
 
 - **Polling rate.** The header shows the rate actually achieved (typically a few Hz over BLE), not the prototype's fixed 25 Hz. Graph history is sampled every 150 ms, so its time axis matches the design.
 - **Ignition off.** The logger answers `N/A`; engine values show "—", the battery reading stays live and the header shows "No ECU".
+- **Logger standby.** The telelogger powers down OBD after 3 minutes without motion; the header then shows "Standby". Firmware from `obd-live-ble` (commit `fdda8d6` or later) stays awake while the app is connected and wakes up when the app connects. If the link drops (e.g. the logger restarts when the engine starts) the app reconnects by itself, showing "Reconnecting…".
 - **Gear** isn't an OBD-II PID. It's estimated from the rpm/speed ratio using typical gear ratios, and shows N when stopped or coasting.
 - **Freeze frame.** OBD-II stores one freeze frame (frame 0) for the code that triggered it, so only that code shows freeze-frame values.
 - **Readiness monitors** list only the monitors the ECU reports as supported, so the count may not be 9.

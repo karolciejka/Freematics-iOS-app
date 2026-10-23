@@ -38,7 +38,9 @@ struct AppShellView: View {
     private var linkLabel: String {
         if model.paused { return "Paused" }
         if model.source == .demo { return "Demo · 25 Hz" }
-        return model.rateHz > 0 ? LiveDecode.rateLabel(model.rateHz) : "No ECU"
+        if model.reconnecting { return "Reconnecting…" }
+        if model.rateHz > 0 { return LiveDecode.rateLabel(model.rateHz) }
+        return model.loggerAsleep ? "Standby" : "No ECU"
     }
 
     private var header: some View {
