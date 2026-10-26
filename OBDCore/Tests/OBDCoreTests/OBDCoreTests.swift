@@ -105,6 +105,19 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(OBDParse.vinFromMode09(lines), "WVWZZZ6RZCY123456")
         XCTAssertNil(OBDParse.vinFromMode09("49020100000057;49020256575A5A"))
         XCTAssertNil(OBDParse.vinFromMode09("N/A"))
+        XCTAssertNil(OBDParse.vinFromMode09("0902;7F0912"))
+    }
+
+    func testVINFromUDS() {
+        let reply = "22F190;014;0:62F190575657;1:5A5A5A36525A43;2:59313233343536"
+        XCTAssertEqual(OBDParse.vinFromUDS(reply), "WVWZZZ6RZCY123456")
+        XCTAssertNil(OBDParse.vinFromUDS("7F2231"))
+    }
+
+    func testNegativeResponse() {
+        XCTAssertEqual(OBDParse.negativeResponse("0902;7F0912", service: 0x09), 0x12)
+        XCTAssertNil(OBDParse.negativeResponse("7F0912", service: 0x22))
+        XCTAssertEqual(OBDParse.negativeResponseText(0x12), "not supported by this ECU")
     }
 }
 

@@ -192,8 +192,12 @@ final class AppModel: ObservableObject {
             // only sent when the logger had no VIN: ask the car directly (mode 09 PID 02)
             ("RAW0902", { r in
                 if let v = r.flatMap(OBDParse.vinFromMode09) { return "VIN \(v)" }
-                if r == "N/A" { return "OBD not ready yet · will retry" }
-                return "VIN not reported by the car (\(r.map { String($0.prefix(40)) } ?? "no reply"))"
+                return AppModel.vinFailure(r, service: 0x09)
+            }),
+            // VW-group ECUs that refuse mode 09 often answer the UDS VIN identifier
+            ("RAW22F190", { r in
+                if let v = r.flatMap(OBDParse.vinFromUDS) { return "VIN \(v)" }
+                return AppModel.vinFailure(r, service: 0x22)
             }),
             ("RAW0100", { r in
                 guard let r else { return "no reply" }
@@ -216,12 +220,13 @@ final class AppModel: ObservableObject {
                 return
             }
             let (cmd, describe) = steps[i]
-            if cmd == "RAW0902" && vin != nil { return run(i + 1) }
+            if (cmd == "RAW0902" || cmd == "RAW22F190") && vin != nil { return run(i + 1) }
             link.send(cmd) { [weak self] reply in
                 guard let self, gen == self.linkGeneration else { return }
                 if cmd == "BATT", let v = reply.flatMap(OBDParse.battery) { self.readings[.volt] = v }
                 if cmd == "VIN" { vin = reply.flatMap(OBDParse.vin) }
                 if cmd == "RAW0902" { vin = reply.flatMap(OBDParse.vinFromMode09) }
+                if cmd == "RAW22F190" { vin = reply.flatMap(OBDParse.vinFromUDS) }
                 self.connectLog.append((cmd, describe(reply)))
                 if reply == nil && i == 0 {
                     self.link.disconnect()
@@ -370,11 +375,27 @@ final class AppModel: ObservableObject {
                     return done()
                 }
                 self.raw("0902") { reply in
-                    if let v = reply.flatMap(OBDParse.vinFromMode09) { self.setVIN(v, gen) }
-                    done()
+                    if let v = reply.flatMap(OBDParse.vinFromMode09) {
+                        self.setVIN(v, gen)
+                        return done()
+                    }
+                    self.raw("22F190") { reply in
+                        if let v = reply.flatMap(OBDParse.vinFromUDS) { self.setVIN(v, gen) }
+                        done()
+                    }
                 }
             }
         }
+    }
+
+    /// Connect-log text for a VIN request that didn't return one.
+    static func vinFailure(_ reply: String?, service: UInt8) -> String {
+        guard let reply else { return "no reply" }
+        if reply == "N/A" { return "OBD not ready yet · will retry" }
+        if let code = OBDParse.negativeResponse(reply, service: service) {
+            return "no VIN · \(OBDParse.negativeResponseText(code))"
+        }
+        return "no VIN (\(reply.prefix(40)))"
     }
 
     private func setVIN(_ v: String, _ gen: Int) {

@@ -159,6 +159,30 @@ enum OBDParse {
         return v.count == 17 && v.allSatisfy({ $0.isLetter || $0.isNumber }) ? v : nil
     }
 
+    /// VIN from a UDS ReadDataByIdentifier F190 reply (`62 F1 90` + 17 ASCII bytes). VW-group and other
+    /// manufacturer ECUs often answer this when they refuse the OBD mode 09 request.
+    static func vinFromUDS(_ reply: String) -> String? {
+        guard let m = messages(reply).first(where: { $0.count >= 20 && $0[0] == 0x62 && $0[1] == 0xF1 && $0[2] == 0x90 }) else { return nil }
+        let bytes = m[3...].filter { $0 >= 0x30 && $0 < 0x7F }
+        return vin(String(decoding: bytes.prefix(17), as: UTF8.self))
+    }
+
+    /// Reason code of a negative response (`7F <service> <code>`) to `service`, if that's what the ECU sent.
+    static func negativeResponse(_ reply: String, service: UInt8) -> UInt8? {
+        messages(reply).first(where: { $0.count >= 3 && $0[0] == 0x7F && $0[1] == service }).map { $0[2] }
+    }
+
+    static func negativeResponseText(_ code: UInt8) -> String {
+        switch code {
+        case 0x11: return "service not supported"
+        case 0x12: return "not supported by this ECU"
+        case 0x22: return "conditions not correct"
+        case 0x31: return "request out of range"
+        case 0x33: return "security access denied"
+        default: return String(format: "refused, code %02X", code)
+        }
+    }
+
     /// VIN from a mode 09 PID 02 reply: one multi-frame CAN message (`49 02 01` + 17 ASCII bytes),
     /// or on ISO 9141 / KWP five numbered lines of four bytes each.
     static func vinFromMode09(_ reply: String) -> String? {
