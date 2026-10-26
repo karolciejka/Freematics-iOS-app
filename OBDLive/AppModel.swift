@@ -6,9 +6,10 @@ enum SettingsKey {
     static let rpmStyle = "rpmStyle"   // "Dial" | "Bar"
     static let units = "units"         // "Metric" | "Imperial"
     static let demoMode = "demoMode"   // "Parked" | "Driving"
+    static let combinedRequests = "combinedRequests" // ask for up to 6 PIDs per OBD request
 
     static func registerDefaults() {
-        UserDefaults.standard.register(defaults: [rpmStyle: "Dial", units: "Metric", demoMode: "Parked"])
+        UserDefaults.standard.register(defaults: [rpmStyle: "Dial", units: "Metric", demoMode: "Parked", combinedRequests: true])
     }
 }
 
@@ -46,6 +47,8 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var codes: [TroubleCode] = []
     @Published private(set) var monitors: [Monitor] = []
+    /// What the ECU itself reports in mode 01 PID 01 (MIL, stored-code count); nil in demo mode or before it's read.
+    @Published private(set) var ecuStatus: MonitorStatus?
     @Published private(set) var codesNote: String?
     @Published private(set) var codesLoading = false
 
@@ -69,6 +72,8 @@ final class AppModel: ObservableObject {
     private var linkGeneration = 0
     private var deviceID: UUID?
     private var vinAttempts = 0
+    private var plan = PollPlan(pids: [], combined: false)
+    private var lastDiscovery = Date.distantPast
     private var lastVINAttempt = Date.distantPast
 
     init() {
@@ -308,7 +313,77 @@ final class AppModel: ObservableObject {
     private func startPolling(_ gen: Int) {
         polling = true
         pollTimes = []
+        plan = PollPlan(pids: Channel.polled.compactMap { $0.info.obdPID },
+                        combined: UserDefaults.standard.bool(forKey: SettingsKey.combinedRequests))
+        lastDiscovery = .distantPast
         poll(gen)
+    }
+
+    /// Ask the car which PIDs it supports (0100/0120/0140) so unsupported ones aren't polled, and probe
+    /// whether it answers combined requests.
+    private func discover(_ gen: Int, _ done: @escaping () -> Void) {
+        var supported: Set<UInt8>?
+        func list(_ base: UInt8, _ then: @escaping () -> Void) {
+            raw(String(format: "01%02X", base)) { [weak self] reply in
+                guard let self, gen == self.linkGeneration else { return }
+                if let s = reply.flatMap({ OBDParse.supportedPIDs($0, base: base) }) { supported = (supported ?? []).union(s) }
+                then()
+            }
+        }
+        func probe() {
+            guard plan.combined && !plan.probed else { return done() }
+            raw("01" + PollPlan.probe.map { String(format: "%02X", $0) }.joined()) { [weak self] reply in
+                guard let self, gen == self.linkGeneration else { return }
+                self.plan.recordProbe(answered: Set(OBDParse.mode01Values(reply ?? "").keys))
+                done()
+            }
+        }
+        guard !plan.discovered else { return probe() }
+        list(0x00) {
+            guard supported != nil else { return probe() } // OBD not ready yet; retried later
+            let finish = { [weak self] in
+                guard let self, gen == self.linkGeneration else { return }
+                if let s = supported { self.plan.apply(supported: s) }
+                probe()
+            }
+            if supported!.contains(0x20) {
+                list(0x20) { supported!.contains(0x40) ? list(0x40, finish) : finish() }
+            } else {
+                finish()
+            }
+        }
+    }
+
+    /// One read of every active PID: combined RAW requests (up to 6 PIDs each) or a single PIDS command.
+    /// Completes with the data bytes per PID, or nil when the logger says OBD isn't ready.
+    private func readCycle(_ gen: Int, _ completion: @escaping ([UInt8: [UInt8]]?) -> Void) {
+        if plan.combined {
+            var values: [UInt8: [UInt8]] = [:]
+            var chunks = plan.requests
+            func nextChunk() {
+                guard !chunks.isEmpty else { return completion(values) }
+                let chunk = chunks.removeFirst()
+                raw("01" + chunk.map { String(format: "%02X", $0) }.joined()) { [weak self] reply in
+                    guard let self, gen == self.linkGeneration else { return }
+                    if reply == "N/A" { return completion(nil) }
+                    if let reply { values.merge(OBDParse.mode01Values(reply)) { $1 } }
+                    nextChunk()
+                }
+            }
+            nextChunk()
+        } else {
+            let pids = plan.active
+            link.send(FreematicsBLE.pids(pids)) { [weak self] reply in
+                guard let self, gen == self.linkGeneration else { return }
+                if reply == "N/A" { return completion(nil) }
+                var values: [UInt8: [UInt8]] = [:]
+                if let reply, let parts = OBDParse.pidsReply(reply, count: pids.count) {
+                    for (pid, bytes) in zip(pids, parts) { if let bytes { values[pid] = bytes } }
+                    self.logTraffic(pids: pids, reply: reply)
+                }
+                completion(values)
+            }
+        }
     }
 
     private func poll(_ gen: Int) {
@@ -327,24 +402,28 @@ final class AppModel: ObservableObject {
             }
             return
         }
-        let pids = Channel.polled.compactMap { $0.info.obdPID }
-        let cmd = FreematicsBLE.pids(pids)
-        link.send(cmd) { [weak self] reply in
+        if (!plan.discovered || (plan.combined && !plan.probed)) && Date().timeIntervalSince(lastDiscovery) > 10 {
+            lastDiscovery = Date()
+            discover(gen) { next() }
+            return
+        }
+        readCycle(gen) { [weak self] data in
             guard let self, gen == self.linkGeneration else { return }
-            if let reply, let values = LiveDecode.readings(reply) {
-                var r = Readings(values: values)
+            if let data {
+                self.plan.recordCycle(answered: Set(data.keys))
+                var r = Readings(values: LiveDecode.readings(from: data))
                 r[.volt] = self.readings[.volt]
                 r.gear = LiveDecode.estimatedGear(rpm: r[.rpm], speed: r[.speed])
                 self.readings = r
                 self.loggerAsleep = false
                 self.retryVINIfMissing(gen)
-                self.logTraffic(pids: pids, reply: reply)
+                if data.isEmpty { return next() } // nothing answered (timeout): not a completed read
                 let now = Date()
                 self.pollTimes = Array((self.pollTimes + [now]).suffix(10))
                 if let first = self.pollTimes.first, self.pollTimes.count > 1 {
                     self.rateHz = Double(self.pollTimes.count - 1) / max(now.timeIntervalSince(first), 0.001)
                 }
-            } else if reply == "N/A" {
+            } else {
                 // ignition off / ECU asleep: keep the battery reading, drop stale engine values
                 self.readings = Readings(values: self.readings.values.filter { $0.key == .volt })
                 self.rateHz = 0
@@ -469,6 +548,7 @@ final class AppModel: ObservableObject {
                             guard gen == self.linkGeneration else { return done() }
                             self.codes = list
                             self.monitors = status?.monitors ?? []
+                            self.ecuStatus = status
                             self.codesNote = obdReady ? nil : "OBD isn't ready. Switch the ignition on to read codes."
                             if let o = self.openCode, !list.contains(where: { $0.code == o }) { self.openCode = nil }
                             if self.openCode == nil { self.openCode = list.first { !$0.freezeFrame.isEmpty }?.code }

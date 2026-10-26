@@ -43,6 +43,8 @@ struct CodesView: View {
                 Rule()
             }
 
+            if model.source == .device, let st = model.ecuStatus { ecuReport(st) }
+
             HStack {
                 Kicker(text: "Readiness monitors · Mode 01 PID 01", size: 11)
                 Spacer()
@@ -66,6 +68,27 @@ struct CodesView: View {
             }
             Color.clear.frame(height: 16)
         }
+    }
+
+    /// What the engine ECU itself says (mode 01 PID 01), so "no codes" can be told apart from codes the app missed.
+    private func ecuReport(_ st: MonitorStatus) -> some View {
+        let stored = model.codes.filter { $0.status == .stored }.count
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Check-engine light \(st.milOn ? "on" : "off") · ECU reports \(st.storedCount) stored code\(st.storedCount == 1 ? "" : "s")")
+                .font(DS.body(13))
+                .foregroundStyle(st.milOn ? DS.accent700 : DS.neutral800)
+            if st.storedCount != stored {
+                Text("\(stored) of them could be read. The CAN tab shows the raw 03 reply.")
+                    .font(DS.body(13))
+                    .foregroundStyle(DS.accent700)
+            }
+            Text("OBD-II reports engine and emission faults only. ABS, airbag and body faults need a manufacturer diagnostic tool.")
+                .font(DS.body(12))
+                .foregroundStyle(DS.neutral700)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
     }
 
     private func codeBlock(_ c: TroubleCode) -> some View {

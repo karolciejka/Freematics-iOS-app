@@ -76,6 +76,24 @@
 				<string>Driving</string>
 			</array>
 		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>Ask the car for up to 6 readings per request. Faster; turn off if live values go missing.</string>
+			<key>Title</key>
+			<string>Logger</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>combinedRequests</string>
+			<key>Title</key>
+			<string>Combined OBD requests</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -14,6 +14,15 @@ enum LiveDecode {
         return out
     }
 
+    /// Readings from mode 01 data bytes per PID (any of the polled PIDs may be missing).
+    static func readings(from data: [UInt8: [UInt8]]) -> [ChannelKey: Double] {
+        var out: [ChannelKey: Double] = [:]
+        for key in Channel.polled {
+            if let pid = key.info.obdPID, let bytes = data[pid], let v = OBDParse.decode(pid: pid, bytes) { out[key] = v }
+        }
+        return out
+    }
+
     /// Rpm per km/h in each gear (typical small petrol hatchback); OBD-II has no gear PID.
     static let gearRatios: [Double] = [0, 105, 62, 43, 33, 27, 23]
 

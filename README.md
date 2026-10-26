@@ -31,7 +31,8 @@ What the app sends:
 | When | Command | Used for |
 | --- | --- | --- |
 | Connect | `ATE0`, `UPTIME`, `BATT`, `VIN`, `RAW0100` | the setup log, header (model year and make from the VIN) |
-| Continuously | `PIDS0C0D0411050F0E5E` | rpm, speed, load, throttle, coolant, intake air, timing, fuel rate |
+| Connect | `RAW0100`, `RAW0120`, `RAW0140`, `RAW010C0D` | which PIDs the car supports; whether it answers combined requests |
+| Continuously | `RAW010C0D04110F05` + `RAW010E5E` (combined), or `PIDS0C0D0411050F0E5E` | rpm, speed, load, throttle, coolant, intake air, timing, fuel rate, skipping PIDs the car doesn't answer |
 | Every 2 s | `BATT` | battery voltage measured by the logger |
 | Codes tab | `RAW0101`, `RAW03`, `RAW07`, `RAW020200`, `RAW02xx00` | MIL and readiness monitors, stored and pending codes, freeze frame |
 | Clear codes | `RAW04` | Mode 04 clear, then the codes are read again |

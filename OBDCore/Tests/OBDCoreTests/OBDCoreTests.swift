@@ -205,3 +205,59 @@ final class SimulatorTests: XCTestCase {
         XCTAssertEqual(Set(f.map(\.id)).count, 3)
     }
 }
+
+final class PollPlanTests: XCTestCase {
+
+    func testSupportedPIDs() {
+        // 0100 -> BE 3E B8 11: 01,03-07,0B-0F,11,13,15,1C,20 ... bits set
+        let s = OBDParse.supportedPIDs("0100;4100BE3EB811", base: 0x00)!
+        XCTAssertTrue(s.isSuperset(of: [0x04, 0x05, 0x0C, 0x0D, 0x0E, 0x0F, 0x11]))
+        XCTAssertFalse(s.contains(0x02))
+        XCTAssertTrue(s.contains(0x20)) // next list available
+        XCTAssertEqual(OBDParse.supportedPIDs("4140FED00400", base: 0x40)?.contains(0x5E), false)
+        XCTAssertEqual(OBDParse.supportedPIDs("41400000000C", base: 0x40)?.contains(0x5E), true)
+        XCTAssertNil(OBDParse.supportedPIDs("NODATA", base: 0x40))
+    }
+
+    func testCombinedReply() {
+        // 0C 0D 04 11 0F 05 in one multi-frame reply (14 bytes)
+        let v = OBDParse.mode01Values("010C0D04110F05;00E;0:410C0C180D00;1:043D11090F4305;2:56")
+        XCTAssertEqual(v[0x0C], [0x0C, 0x18])
+        XCTAssertEqual(v[0x0D], [0x00])
+        XCTAssertEqual(v[0x11], [0x09])
+        XCTAssertEqual(v[0x05], [0x56])
+        XCTAssertEqual(v.count, 6)
+        XCTAssertEqual(OBDParse.mode01Values("410E8A")[0x0E], [0x8A])
+        XCTAssertTrue(OBDParse.mode01Values("NODATA").isEmpty)
+    }
+
+    func testRequestsAndDiscovery() {
+        var p = PollPlan(pids: [0x0C, 0x0D, 0x04, 0x11, 0x05, 0x0F, 0x0E, 0x5E], combined: true)
+        XCTAssertEqual(p.requests.map(\.count), [6, 2])
+        p.apply(supported: [0x0C, 0x0D, 0x04, 0x11, 0x05, 0x0F, 0x0E])
+        XCTAssertEqual(p.active.count, 7)
+        XCTAssertEqual(p.requests.map(\.count), [6, 1])
+        p.apply(supported: [0x01])
+        XCTAssertEqual(p.active.count, 7) // never filter down to nothing
+    }
+
+    func testProbe() {
+        var p = PollPlan(pids: [0x0C, 0x0D], combined: true)
+        p.recordProbe(answered: [])
+        XCTAssertFalse(p.probed)
+        XCTAssertTrue(p.combined)
+        p.recordProbe(answered: [0x0C])
+        XCTAssertTrue(p.probed)
+        XCTAssertFalse(p.combined)
+        XCTAssertEqual(p.requests, [[0x0C, 0x0D]])
+    }
+
+    func testDropsSilentPIDs() {
+        var p = PollPlan(pids: [0x0C, 0x0D, 0x5E], combined: false)
+        for _ in 0..<2 { p.recordCycle(answered: [0x0C, 0x0D]) }
+        XCTAssertEqual(p.active, [0x0C, 0x0D, 0x5E])
+        p.recordCycle(answered: [])          // car off: no change
+        p.recordCycle(answered: [0x0C, 0x0D])
+        XCTAssertEqual(p.active, [0x0C, 0x0D])
+    }
+}
