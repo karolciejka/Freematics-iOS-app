@@ -68,6 +68,8 @@ final class AppModel: ObservableObject {
     private var frameSeq = 0
     private var linkGeneration = 0
     private var deviceID: UUID?
+    private var vinAttempts = 0
+    private var lastVINAttempt = Date.distantPast
 
     init() {
         SettingsKey.registerDefaults()
@@ -115,6 +117,7 @@ final class AppModel: ObservableObject {
         connectLog = []
         connectError = nil
         deviceID = device.id
+        vinAttempts = 0
         linkGeneration += 1
         let gen = linkGeneration
         link.connect(device.id) { [weak self] result in
@@ -187,7 +190,11 @@ final class AppModel: ObservableObject {
             ("BATT", { r in r.flatMap(OBDParse.battery).map { "\(ReadingFormat.fixed($0, 2)) V" } ?? (r ?? "no reply") }),
             ("VIN", { r in r.flatMap(OBDParse.vin).map { "VIN \($0)" } ?? "VIN not cached by the logger" }),
             // only sent when the logger had no VIN: ask the car directly (mode 09 PID 02)
-            ("RAW0902", { r in r.flatMap(OBDParse.vinFromMode09).map { "VIN \($0)" } ?? "VIN not reported by the car" }),
+            ("RAW0902", { r in
+                if let v = r.flatMap(OBDParse.vinFromMode09) { return "VIN \(v)" }
+                if r == "N/A" { return "OBD not ready yet · will retry" }
+                return "VIN not reported by the car (\(r.map { String($0.prefix(40)) } ?? "no reply"))"
+            }),
             ("RAW0100", { r in
                 guard let r else { return "no reply" }
                 if r == "N/A" { return "OBD not ready · switch the ignition on" }
@@ -325,6 +332,7 @@ final class AppModel: ObservableObject {
                 r.gear = LiveDecode.estimatedGear(rpm: r[.rpm], speed: r[.speed])
                 self.readings = r
                 self.loggerAsleep = false
+                self.retryVINIfMissing(gen)
                 self.logTraffic(pids: pids, reply: reply)
                 let now = Date()
                 self.pollTimes = Array((self.pollTimes + [now]).suffix(10))
@@ -345,6 +353,34 @@ final class AppModel: ObservableObject {
             }
             next()
         }
+    }
+
+    /// The VIN is read during the connect exchange, which can run before the logger's OBD side is up
+    /// (e.g. right after the app woke it from standby). Once live values flow, ask again: first the
+    /// logger's cached VIN, then the car directly (mode 09 PID 02). Up to 3 attempts, 15 s apart.
+    private func retryVINIfMissing(_ gen: Int) {
+        guard vin == nil, vinAttempts < 3, Date().timeIntervalSince(lastVINAttempt) > 15 else { return }
+        vinAttempts += 1
+        lastVINAttempt = Date()
+        enqueue(gen) { [weak self] done in
+            guard let self else { return done() }
+            self.link.send("VIN") { reply in
+                if let v = reply.flatMap(OBDParse.vin) {
+                    self.setVIN(v, gen)
+                    return done()
+                }
+                self.raw("0902") { reply in
+                    if let v = reply.flatMap(OBDParse.vinFromMode09) { self.setVIN(v, gen) }
+                    done()
+                }
+            }
+        }
+    }
+
+    private func setVIN(_ v: String, _ gen: Int) {
+        guard gen == linkGeneration else { return }
+        vin = v
+        vehicleLabel = VINInfo.vehicle(vin: v, currentYear: Calendar.current.component(.year, from: Date()))
     }
 
     /// Queue work between polls so it never interleaves with a PIDS exchange; `done` must resume polling.
