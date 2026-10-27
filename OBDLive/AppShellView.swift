@@ -3,11 +3,12 @@ import SwiftUI
 /// Header, the active tab's content and the bottom tab bar.
 struct AppShellView: View {
     @EnvironmentObject var model: AppModel
+    @AppStorage(SettingsKey.skin) private var skinRaw = Skin.simple.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rule()
+            Rule(color: DS.headerRule)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     switch model.tab {
@@ -55,6 +56,18 @@ struct AppShellView: View {
                     .tracking(-0.48)
             }
             Spacer(minLength: 0)
+            // skin switch, as in the design's header
+            Button { skinRaw = DS.skin == .racing ? Skin.simple.rawValue : Skin.racing.rawValue } label: {
+                Text(DS.skin.rawValue)
+                    .font(DS.body(11))
+                    .foregroundStyle(DS.neutral800)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .overlay(Rectangle().strokeBorder(DS.neutral300, lineWidth: 1))
+            }
+            .buttonStyle(TintButtonStyle(background: .clear, pressed: DS.neutral200))
+            .accessibilityLabel("Skin: \(DS.skin.rawValue). Switch skin")
+            .padding(.trailing, -6) // chips sit 6pt apart in the design
             Button(action: model.disconnect) {
                 HStack(spacing: 6) {
                     Rectangle()

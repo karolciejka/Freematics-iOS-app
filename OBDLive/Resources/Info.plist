@@ -31,6 +31,9 @@
 		<string>Archivo-Regular.ttf</string>
 		<string>Archivo-SemiBold.ttf</string>
 		<string>Archivo-ExtraBold.ttf</string>
+		<string>Saira-Regular.ttf</string>
+		<string>SairaCondensed-Bold.ttf</string>
+		<string>SairaCondensed-ExtraBold.ttf</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>
@@ -45,7 +48,5 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>UIUserInterfaceStyle</key>
-	<string>Light</string>
 </dict>
 </plist>

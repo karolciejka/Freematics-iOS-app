@@ -10,7 +10,7 @@ struct LiveView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !model.codes.isEmpty { milBanner }
-            if rpmStyle == "Bar" { rpmBar } else { rpmDial }
+            if DS.skin == .racing { racingGauge } else if rpmStyle == "Bar" { rpmBar } else { rpmDial }
             Rule()
             cells
             Text("Tap a reading to graph it.")
@@ -50,6 +50,17 @@ struct LiveView: View {
             }
         }
         .buttonStyle(FlatButtonStyle(background: DS.accent100, pressed: DS.accent200))
+    }
+
+    // Racing skin: Type R rev bar with the gear in the middle (replaces dial / bar).
+    private var racingGauge: some View {
+        Button { graph(.rpm) } label: {
+            TypeRGauge(rpm: rpm ?? 0, rpmText: rpmText, peakText: peakText,
+                       gear: model.readings.gear > 0 ? String(model.readings.gear) : "N",
+                       speedText: fmt.value(.speed, model.readings[.speed]), speedUnit: fmt.unit(.speed),
+                       rpmColor: rpmColor)
+        }
+        .buttonStyle(FlatButtonStyle(pressed: DS.text.opacity(0.04)))
     }
 
     // 2a: analog tachometer centred, the number under it, Peak and Gear below.

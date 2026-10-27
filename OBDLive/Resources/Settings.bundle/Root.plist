@@ -12,6 +12,26 @@
 		</dict>
 		<dict>
 			<key>DefaultValue</key>
+			<string>Simple</string>
+			<key>Key</key>
+			<string>skin</string>
+			<key>Title</key>
+			<string>Skin</string>
+			<key>Titles</key>
+			<array>
+				<string>Simple</string>
+				<string>Racing</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>Simple</string>
+				<string>Racing</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
 			<string>Dial</string>
 			<key>Key</key>
 			<string>rpmStyle</string>
