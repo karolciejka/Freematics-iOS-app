@@ -74,17 +74,28 @@ struct PollPlan: Equatable {
 
     /// An ECU that answers only the first PID of a combined request doesn't support them; poll one
     /// PID per request instead. An empty answer (car off) decides nothing.
-    mutating func recordProbe(answered: Set<UInt8>) {
+    /// `refused`: the ECU answered with a negative response (`7F 01 …`), e.g. 7F 01 12 on a 2012 VW Polo.
+    mutating func recordProbe(answered: Set<UInt8>, refused: Bool = false) {
+        if refused {
+            probed = true
+            combined = false
+            return
+        }
         guard !answered.isEmpty else { return }
         probed = true
         if !answered.isSuperset(of: PollPlan.probe) { combined = false }
     }
 
+    /// A combined request was refused while polling: poll one PID per request from now on.
+    mutating func combinedRefused() { combined = false }
+
     /// Record a full cycle. PIDs unanswered three cycles in a row are dropped, but only while other
     /// PIDs are answered (when nothing answers, the car is off rather than lacking those PIDs).
-    mutating func recordCycle(answered: Set<UInt8>) {
+    /// `unknown`: PIDs whose request failed as a whole (refused or unanswered combined request), which
+    /// says nothing about the PIDs themselves, so they don't count as misses.
+    mutating func recordCycle(answered: Set<UInt8>, unknown: Set<UInt8> = []) {
         guard !answered.isEmpty else { return }
-        for pid in active {
+        for pid in active where !unknown.contains(pid) {
             misses[pid] = answered.contains(pid) ? 0 : (misses[pid] ?? 0) + 1
         }
         let dropped = active.filter { (misses[$0] ?? 0) >= PollPlan.missesBeforeDrop }

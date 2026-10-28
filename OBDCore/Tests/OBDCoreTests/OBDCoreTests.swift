@@ -252,6 +252,23 @@ final class PollPlanTests: XCTestCase {
         XCTAssertEqual(p.requests, [[0x0C, 0x0D]])
     }
 
+    func testProbeRefused() {
+        // 2012 VW Polo: 01 0C 0D -> 7F 01 12
+        var p = PollPlan(pids: [0x0C, 0x0D, 0x0E], combined: true)
+        let refused = OBDParse.negativeResponse("010C0D;7F0112", service: 0x01) != nil
+        XCTAssertTrue(refused)
+        p.recordProbe(answered: [], refused: refused)
+        XCTAssertTrue(p.probed)
+        XCTAssertFalse(p.combined)
+        XCTAssertEqual(p.requests, [[0x0C, 0x0D, 0x0E]])
+    }
+
+    func testRefusedChunkDoesNotDropPIDs() {
+        var p = PollPlan(pids: [0x0C, 0x0D, 0x0E], combined: true)
+        for _ in 0..<5 { p.recordCycle(answered: [0x0E], unknown: [0x0C, 0x0D]) }
+        XCTAssertEqual(p.active, [0x0C, 0x0D, 0x0E])
+    }
+
     func testDropsSilentPIDs() {
         var p = PollPlan(pids: [0x0C, 0x0D, 0x5E], combined: false)
         for _ in 0..<2 { p.recordCycle(answered: [0x0C, 0x0D]) }

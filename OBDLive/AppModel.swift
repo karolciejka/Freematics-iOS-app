@@ -335,7 +335,8 @@ final class AppModel: ObservableObject {
             guard plan.combined && !plan.probed else { return done() }
             raw("01" + PollPlan.probe.map { String(format: "%02X", $0) }.joined()) { [weak self] reply in
                 guard let self, gen == self.linkGeneration else { return }
-                self.plan.recordProbe(answered: Set(OBDParse.mode01Values(reply ?? "").keys))
+                self.plan.recordProbe(answered: Set(OBDParse.mode01Values(reply ?? "").keys),
+                                      refused: reply.flatMap { OBDParse.negativeResponse($0, service: 0x01) } != nil)
                 done()
             }
         }
@@ -356,18 +357,28 @@ final class AppModel: ObservableObject {
     }
 
     /// One read of every active PID: combined RAW requests (up to 6 PIDs each) or a single PIDS command.
-    /// Completes with the data bytes per PID, or nil when the logger says OBD isn't ready.
-    private func readCycle(_ gen: Int, _ completion: @escaping ([UInt8: [UInt8]]?) -> Void) {
+    /// Completes with the data bytes per PID plus the PIDs whose request failed as a whole (`unknown`),
+    /// or nil when the logger says OBD isn't ready.
+    private func readCycle(_ gen: Int, _ completion: @escaping ((data: [UInt8: [UInt8]], unknown: Set<UInt8>)?) -> Void) {
         if plan.combined {
             var values: [UInt8: [UInt8]] = [:]
+            var unknown = Set<UInt8>()
             var chunks = plan.requests
             func nextChunk() {
-                guard !chunks.isEmpty else { return completion(values) }
+                guard !chunks.isEmpty else { return completion((values, unknown)) }
                 let chunk = chunks.removeFirst()
                 raw("01" + chunk.map { String(format: "%02X", $0) }.joined()) { [weak self] reply in
                     guard let self, gen == self.linkGeneration else { return }
                     if reply == "N/A" { return completion(nil) }
-                    if let reply { values.merge(OBDParse.mode01Values(reply)) { $1 } }
+                    let got = OBDParse.mode01Values(reply ?? "")
+                    values.merge(got) { $1 }
+                    if reply.flatMap({ OBDParse.negativeResponse($0, service: 0x01) }) != nil {
+                        // the ECU refuses combined requests (7F 01 xx): one PID per request from now on
+                        self.plan.combinedRefused()
+                        unknown.formUnion(chunk)
+                    } else if got.isEmpty && chunk.count > 1 {
+                        unknown.formUnion(chunk)
+                    }
                     nextChunk()
                 }
             }
@@ -382,7 +393,7 @@ final class AppModel: ObservableObject {
                     for (pid, bytes) in zip(pids, parts) { if let bytes { values[pid] = bytes } }
                     self.logTraffic(pids: pids, reply: reply)
                 }
-                completion(values)
+                completion((values, reply == nil ? Set(pids) : []))
             }
         }
     }
@@ -408,10 +419,10 @@ final class AppModel: ObservableObject {
             discover(gen) { next() }
             return
         }
-        readCycle(gen) { [weak self] data in
+        readCycle(gen) { [weak self] result in
             guard let self, gen == self.linkGeneration else { return }
-            if let data {
-                self.plan.recordCycle(answered: Set(data.keys))
+            if case let (data, unknown)? = result {
+                self.plan.recordCycle(answered: Set(data.keys), unknown: unknown)
                 var r = Readings(values: LiveDecode.readings(from: data))
                 r[.volt] = self.readings[.volt]
                 r.gear = LiveDecode.estimatedGear(rpm: r[.rpm], speed: r[.speed])
