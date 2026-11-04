@@ -1,6 +1,21 @@
 # OBD Live (iOS)
 
-SwiftUI implementation of `project/OBD Prototype.dc.html`: Connect, Live (2a dial or 1a bar), Graph, Codes and CAN, styled with the Modernist design system. It talks to a Freematics ONE+ over Bluetooth Low Energy, or runs on the prototype's demo data.
+**Turn your Freematics ONE+ into a live dashboard and diagnostics tool on your iPhone.**
+
+The [Freematics ONE+](https://freematics.com/products/freematics-one-plus/) is a capable OBD-II logger, but on iPhone it has mostly been a device you configure rather than watch. Freematics' official iOS app, Freematics Controller, is built for controlling the logger. There was no iPhone app that shows what your car is doing right now, reads its fault codes and lets you dig into the raw data. OBD Live fills that gap. Plug the logger in, switch the ignition on and connect over Bluetooth. No cables, no laptop and no cloud account needed.
+
+### Key features
+
+- **Live dashboard.** Engine speed on an analog dial, a segmented bar or a Civic Type R style rev display, plus speed, load, throttle, coolant and intake temperatures, battery voltage, timing advance and fuel rate. Out-of-range values turn red, and readings your car doesn't report show as "—".
+- **Graphs.** Tap any reading to follow it on a scrolling 18-second chart with min, average and max.
+- **Fault codes.** Read stored and pending trouble codes with plain-language descriptions, see the freeze frame the car recorded when the fault was logged, check readiness monitors and clear the check-engine light (Mode 04, with a confirmation step).
+- **Bus view.** Every OBD request and reply between the logger and the car, shown live.
+- **Knows your car.** It reads the VIN and decodes model year, make and, for VW-group cars, the model. If the car won't give its VIN, the app tells you why.
+- **Works with your car's quirks.** It asks the car which readings it supports and polls only those. It sends several readings per request where the car allows it, and falls back to one at a time when it doesn't. It reconnects by itself when the logger restarts.
+- **Two looks.** *Simple*, a clean light Modernist design, and *Racing*, a dark carbon theme with a Type R style rev display. Switch with one tap.
+- **Metric or imperial,** and a **demo mode** with simulated parked and driving data, so you can try everything without a car.
+
+It works with a Freematics ONE+ running the telelogger firmware from [`karolciejka/Freematics`](https://github.com/karolciejka/Freematics/tree/obd-live-ble/firmware_v5/telelogger) (branch `obd-live-ble`; see [Logger firmware](#logger-firmware) below). The app is built in SwiftUI from the *OBD Live* prototype designed in Claude Design.
 
 ## Build
 
