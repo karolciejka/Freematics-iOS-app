@@ -1,0 +1,66 @@
+name: Screenshots
+
+# Runs the app in the iOS Simulator on demo data and commits one PNG per screen to the
+# ci-screenshots branch (docs/screenshots/). Run by hand from the Actions tab.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    name: Capture app screens
+    runs-on: macos-26
+    env:
+      BUNDLE_ID: com.karolciejka.obdlive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild build -project OBDLive.xcodeproj -target OBDLive -configuration Debug \
+            -sdk iphonesimulator SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO | tail -3
+
+      - name: Boot an iPhone simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = [d for r, ds in json.load(sys.stdin)["devices"].items() if "iOS" in r for d in ds]
+          pro = [d for d in devs if d["name"].endswith(" Pro")] or [d for d in devs if d["name"].startswith("iPhone")]
+          print(sorted(pro, key=lambda d: d["name"])[-1]["udid"])')
+          echo "UDID=$udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 \
+            --cellularMode active --cellularBars 4 --wifiBars 3 --dataNetwork 5g
+          xcrun simctl install "$udid" "build/Debug-iphonesimulator/OBD Live.app"
+          xcrun simctl list devices | grep "$udid"
+
+      - name: Capture
+        run: |
+          mkdir -p docs/screenshots
+          shot() { # name, seconds to wait, launch arguments...
+            name=$1; wait=$2; shift 2
+            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@" > /dev/null
+            sleep "$wait"
+            xcrun simctl io "$UDID" screenshot "docs/screenshots/$name.png"
+          }
+          shot connect          4  -autoDemo NO  -skin Simple
+          shot live-simple     10  -autoDemo YES -skin Simple -startTab live  -demoMode Driving -rpmStyle Dial
+          shot live-racing     10  -autoDemo YES -skin Racing -startTab live  -demoMode Driving
+          shot graph           26  -autoDemo YES -skin Simple -startTab graph -demoMode Driving
+          shot codes            8  -autoDemo YES -skin Racing -startTab codes
+          shot can              9  -autoDemo YES -skin Simple -startTab can   -demoMode Driving
+          ls -l docs/screenshots
+
+      - name: Commit to ci-screenshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B ci-screenshots
+          git add docs/screenshots
+          git commit -m "Screenshots from ${GITHUB_SHA::7}"
+          git push -f origin ci-screenshots

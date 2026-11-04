@@ -90,6 +90,11 @@ final class AppModel: ObservableObject {
         let t = Timer(timeInterval: DemoSimulator.tick, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        // Screenshot automation (see .github/workflows/screenshots.yml): `-autoDemo YES` opens demo mode
+        // straight away and `-startTab graph|codes|can` picks the tab it lands on.
+        if UserDefaults.standard.bool(forKey: "autoDemo") {
+            DispatchQueue.main.async { [weak self] in self?.connectDemo() }
+        }
     }
 
     var units: UnitSystem { UnitSystem(rawValue: UserDefaults.standard.string(forKey: SettingsKey.units) ?? "") ?? .metric }
@@ -247,7 +252,7 @@ final class AppModel: ObservableObject {
 
     private func enterApp() {
         screen = .app
-        tab = .live
+        tab = UserDefaults.standard.string(forKey: "startTab").flatMap(Tab.init(rawValue:)) ?? .live
         paused = false
         history = [:]
         extremes = [:]
