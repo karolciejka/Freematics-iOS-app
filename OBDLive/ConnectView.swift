@@ -154,16 +154,22 @@ private struct ConnectContent: View {
     }
 }
 
-/// Photo of the OBD-II port location. Shows the striped placeholder until a "PortPhoto" image is added to the asset catalog.
+/// Photo of the Freematics ONE+ logger on the connect screen, as in the design: the whole photo on a
+/// fixed light grey box (in both skins), printed in grayscale and multiplied so its white background
+/// melts into the box. Falls back to the striped placeholder if the "PortPhoto" asset is missing.
 struct PortPhoto: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             if let image = UIImage(named: "PortPhoto") {
+                Color(hex: 0xE9E9EC)
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .grayscale(1)
-                    .contrast(1.08)
+                    .contrast(1.05)
+                    .blendMode(.multiply)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("OBD-II logger")
             } else {
                 Canvas { ctx, size in
                     ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(DS.bg))
