@@ -15,17 +15,15 @@ The [Freematics ONE+](https://freematics.com/products/freematics-one-plus/) is a
 - **Two looks.** *Simple*, a clean light Modernist design, and *Racing*, a dark carbon theme with a Type R style rev display. Switch with one tap.
 - **Metric or imperial,** and a **demo mode** with simulated parked and driving data, so you can try everything without a car.
 
-<p align="center">
-  <img src="docs/screenshots/live-simple.png" width="250" alt="Live dashboard, Simple skin">
-  <img src="docs/screenshots/live-racing.png" width="250" alt="Live dashboard, Racing skin with the Type R rev display">
-  <img src="docs/screenshots/graph.png" width="250" alt="Graph of engine speed with min, average and max">
-</p>
-<p align="center">
-  <img src="docs/screenshots/codes.png" width="250" alt="Trouble codes with freeze frame, Racing skin">
-  <img src="docs/screenshots/can.png" width="250" alt="Live CAN bus view">
-  <img src="docs/screenshots/connect.png" width="250" alt="Connect screen">
-</p>
-<p align="center"><sub>Demo data. Screens are captured automatically by the <code>Screenshots</code> workflow.</sub></p>
+| | Simple | Racing |
+| --- | :---: | :---: |
+| **Connect** | <img src="docs/screenshots/connect-simple.png" width="260" alt="Connect screen, Simple skin"> | <img src="docs/screenshots/connect-racing.png" width="260" alt="Connect screen, Racing skin"> |
+| **Live** | <img src="docs/screenshots/live-simple.png" width="260" alt="Live dashboard, Simple skin"> | <img src="docs/screenshots/live-racing.png" width="260" alt="Live dashboard, Racing skin"> |
+| **Graph** | <img src="docs/screenshots/graph-simple.png" width="260" alt="Graph of engine speed, Simple skin"> | <img src="docs/screenshots/graph-racing.png" width="260" alt="Graph of engine speed, Racing skin"> |
+| **Codes** | <img src="docs/screenshots/codes-simple.png" width="260" alt="Trouble codes with freeze frame, Simple skin"> | <img src="docs/screenshots/codes-racing.png" width="260" alt="Trouble codes with freeze frame, Racing skin"> |
+| **CAN bus** | <img src="docs/screenshots/can-simple.png" width="260" alt="Live CAN bus view, Simple skin"> | <img src="docs/screenshots/can-racing.png" width="260" alt="Live CAN bus view, Racing skin"> |
+
+<sub>Demo data. Screens are captured automatically by the <code>Screenshots</code> workflow.</sub>
 
 It works with a Freematics ONE+ running the telelogger firmware from [`karolciejka/Freematics`](https://github.com/karolciejka/Freematics/tree/obd-live-ble/firmware_v5/telelogger) (branch `obd-live-ble`; see [Logger firmware](#logger-firmware) below). The app is built in SwiftUI from the *OBD Live* prototype designed in Claude Design.
 
