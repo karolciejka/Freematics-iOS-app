@@ -48,7 +48,7 @@ struct GraphView: View {
                 }
                 Spacer(minLength: 0)
                 Button(model.paused ? "Resume" : "Pause") { model.paused.toggle() }
-                    .buttonStyle(SecondaryButtonStyle(minHeight: 40, fontSize: 13))
+                    .buttonStyle(SecondaryButtonStyle(minHeight: 40, fontSize: 13, radius: 0))
                     .fixedSize()
             }
             .padding(.horizontal, 16)

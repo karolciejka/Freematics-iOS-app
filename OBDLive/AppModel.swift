@@ -3,14 +3,14 @@ import SwiftUI
 
 /// Settings exposed in the iOS Settings app (Settings.bundle); the design's Tweaks panel.
 enum SettingsKey {
-    static let rpmStyle = "rpmStyle"   // "Dial" | "Bar"
+    static let rpmStyle = "rpmStyle"   // "Ring" | "Dial" | "Bar" (Simple skin)
     static let units = "units"         // "Metric" | "Imperial"
     static let demoMode = "demoMode"   // "Parked" | "Driving"
     static let combinedRequests = "combinedRequests" // ask for up to 6 PIDs per OBD request
-    static let skin = "skin"           // "Simple" | "Racing"
+    static let skin = "skin"           // "Simple" | "Racing" | "Power"
 
     static func registerDefaults() {
-        UserDefaults.standard.register(defaults: [rpmStyle: "Dial", units: "Metric", demoMode: "Parked", combinedRequests: true, skin: "Simple"])
+        UserDefaults.standard.register(defaults: [rpmStyle: "Ring", units: "Metric", demoMode: "Parked", combinedRequests: true, skin: "Simple"])
     }
 }
 
