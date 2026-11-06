@@ -8,7 +8,7 @@ struct AppShellView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rule(color: DS.headerRule)
+            Rectangle().fill(DS.headerRule).frame(height: 2)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     switch model.tab {
@@ -56,21 +56,21 @@ struct AppShellView: View {
                     .tracking(-0.48)
             }
             Spacer(minLength: 0)
-            // skin switch, as in the design's header
-            Button { skinRaw = DS.skin == .racing ? Skin.simple.rawValue : Skin.racing.rawValue } label: {
+            // skin switch, as in the design's header: Simple → Racing → Power
+            Button { skinRaw = DS.skin.next.rawValue } label: {
                 Text(DS.skin.rawValue)
                     .font(DS.body(11))
                     .foregroundStyle(DS.neutral800)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .overlay(Rectangle().strokeBorder(DS.neutral300, lineWidth: 1))
+                    .overlay(chip.strokeBorder(DS.neutral300, lineWidth: 1))
             }
-            .buttonStyle(TintButtonStyle(background: .clear, pressed: DS.neutral200))
+            .buttonStyle(TintButtonStyle(background: .clear, pressed: DS.neutral200, shape: chip))
             .accessibilityLabel("Skin: \(DS.skin.rawValue). Switch skin")
             .padding(.trailing, -6) // chips sit 6pt apart in the design
             Button(action: model.disconnect) {
                 HStack(spacing: 6) {
-                    Rectangle()
+                    skinShape(DS.p.pills ? 3 : 0)
                         .fill(model.paused || (model.source == .device && model.rateHz == 0) ? DS.neutral500 : DS.accent)
                         .frame(width: 6, height: 6)
                     Text(model.source == .demo ? linkLabel : "ONE+ · \(linkLabel)")
@@ -81,7 +81,7 @@ struct AppShellView: View {
                 .padding(.horizontal, 10)
                 .foregroundStyle(DS.neutral800)
             }
-            .buttonStyle(TintButtonStyle(background: DS.neutral200, pressed: DS.neutral300))
+            .buttonStyle(TintButtonStyle(background: DS.neutral200, pressed: DS.neutral300, shape: chip))
             .accessibilityLabel("Disconnect")
         }
         .padding(.horizontal, 16)
@@ -89,42 +89,63 @@ struct AppShellView: View {
         .padding(.bottom, 12)
     }
 
+    /// Header chips and tab bar pills: capsules on Simple, square elsewhere (`--skin-pill-r`).
+    private var chip: RoundedRectangle { skinShape(DS.p.pills ? 999 : 0) }
+
     private var tabBar: some View {
         VStack(spacing: 0) {
-            Rule()
-            HStack(spacing: 0) {
-                ForEach(AppModel.Tab.allCases, id: \.self) { tab in
-                    let on = model.tab == tab
-                    Button { model.select(tab) } label: {
-                        HStack(spacing: 6) {
-                            Text(tab == .can ? "CAN" : tab.rawValue.capitalized)
-                                .font(DS.heading(14))
-                            if tab == .codes && !model.codes.isEmpty {
-                                Text("\(model.codes.count)")
-                                    .font(DS.body(10))
-                                    .padding(.vertical, 1)
-                                    .padding(.horizontal, 5)
-                                    .background(DS.accent)
-                                    .foregroundStyle(DS.bg)
-                            }
-                        }
-                        .lineLimit(1)
-                        .fixedSize()
-                        .foregroundStyle(on ? DS.accent : DS.neutral700)
-                        // labels are flush left, so a short trailing inset leaves room for a two-digit badge
-                        .padding(.leading, 16)
-                        .padding(.trailing, 4)
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(alignment: .top) {
-                            (on ? DS.accent : Color.clear).frame(height: 3)
-                        }
-                    }
-                    .buttonStyle(FlatButtonStyle(pressed: DS.text.opacity(0.05)))
+            Rule(color: DS.separator)
+            if DS.p.pillTabs {
+                // Simple: a segmented pill, the selected tab filled in the text colour
+                HStack(spacing: 4) {
+                    ForEach(AppModel.Tab.allCases, id: \.self) { tab in tabButton(tab) }
+                }
+                .padding(5)
+                .background(DS.p.tabBarFill ?? DS.neutral200, in: chip)
+                .overlay(chip.strokeBorder(DS.p.tabBarBorder ?? DS.divider, lineWidth: 1))
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(AppModel.Tab.allCases, id: \.self) { tab in tabButton(tab) }
                 }
             }
         }
         .background(DS.bg.ignoresSafeArea(edges: .bottom))
+    }
+
+    private func tabButton(_ tab: AppModel.Tab) -> some View {
+        let on = model.tab == tab
+        let pill = DS.p.pillTabs
+        return Button { model.select(tab) } label: {
+            HStack(spacing: 6) {
+                Text(tab == .can ? "CAN" : tab.rawValue.capitalized)
+                    .font(pill ? DS.headingSemi(14) : DS.heading(14))
+                if tab == .codes && !model.codes.isEmpty {
+                    Text("\(model.codes.count)")
+                        .font(DS.body(10))
+                        .padding(.vertical, 1)
+                        .padding(.horizontal, 5)
+                        .background(DS.accent, in: chip)
+                        .foregroundStyle(DS.ctaText)
+                }
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(on ? (DS.p.tabOnText ?? DS.accent) : DS.neutral700)
+            // labels are flush left, so a short trailing inset leaves room for a two-digit badge
+            .padding(.leading, pill ? 4 : 16)
+            .padding(.trailing, 4)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: pill ? .center : .leading)
+            .background(on ? (DS.p.tabOnFill ?? .clear) : .clear, in: chip)
+            .overlay(alignment: .top) {
+                (on && !pill ? DS.accent : Color.clear).frame(height: 3)
+            }
+            .contentShape(chip)
+        }
+        .buttonStyle(FlatButtonStyle(pressed: pill ? .clear : DS.text.opacity(0.05)))
     }
 }
 
@@ -132,8 +153,9 @@ struct AppShellView: View {
 struct TintButtonStyle: ButtonStyle {
     let background: Color
     let pressed: Color
+    var shape = RoundedRectangle(cornerRadius: 0)
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.background(configuration.isPressed ? pressed : background)
+        configuration.label.background(configuration.isPressed ? pressed : background, in: shape)
     }
 }
 
@@ -156,7 +178,7 @@ struct ClearCodesSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(spacing: 8) {
                     Button("Clear codes", action: model.clearCodes)
-                        .buttonStyle(PrimaryButtonStyle(minHeight: 50, fontSize: 15))
+                        .buttonStyle(PrimaryButtonStyle(minHeight: 50, fontSize: 15, cta: false))
                     Button("Cancel") { model.showClear = false }
                         .buttonStyle(SecondaryButtonStyle())
                 }
@@ -166,10 +188,48 @@ struct ClearCodesSheet: View {
             .padding(.top, 20)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.surface.ignoresSafeArea(edges: .bottom))
-            .overlay(alignment: .top) { DS.text.frame(height: 2) }
+            .background(TopRoundedRectangle(radius: DS.p.sheetRadius).fill(DS.surface).ignoresSafeArea(edges: .bottom))
+            .overlay(alignment: .top) {
+                // `border-top: 2px solid` following the rounded corners
+                TopEdge(radius: DS.p.sheetRadius).stroke(DS.text, lineWidth: 2).padding(.top, 1)
+            }
             .shadow(color: DS.neutral900.opacity(0.22), radius: 16, y: 12)
         }
         .transition(.opacity)
+    }
+}
+
+/// Rectangle with only its top corners rounded (iOS 16 has no UnevenRoundedRectangle).
+struct TopRoundedRectangle: Shape {
+    var radius: CGFloat
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, rect.width / 2, rect.height)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// The top edge of a TopRoundedRectangle, for its border.
+struct TopEdge: Shape {
+    var radius: CGFloat
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, rect.width / 2)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        if r > 0 {
+            p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        }
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        if r > 0 {
+            p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+        }
+        return p
     }
 }

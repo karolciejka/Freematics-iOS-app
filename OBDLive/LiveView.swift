@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LiveView: View {
     @EnvironmentObject var model: AppModel
-    @AppStorage(SettingsKey.rpmStyle) private var rpmStyle = "Dial"
+    @AppStorage(SettingsKey.rpmStyle) private var rpmStyle = "Ring"
     @AppStorage(SettingsKey.units) private var unitsRaw = "Metric"
 
     private var fmt: ReadingFormat { ReadingFormat(units: UnitSystem(rawValue: unitsRaw) ?? .metric) }
@@ -10,9 +10,18 @@ struct LiveView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !model.codes.isEmpty { milBanner }
-            if DS.skin == .racing { racingGauge } else if rpmStyle == "Bar" { rpmBar } else { rpmDial }
-            Rule()
-            cells
+            switch DS.skin {
+            case .racing: racingGauge
+            case .power: powerGauge
+            case .simple:
+                switch rpmStyle {
+                case "Bar": rpmBar
+                case "Dial": rpmDial
+                default: rpmRing
+                }
+            }
+            Rule(color: DS.separator)
+            if DS.p.cards { cards } else { cells }
             Text("Tap a reading to graph it.")
                 .font(DS.body(12))
                 .foregroundStyle(DS.neutral700)
@@ -31,12 +40,15 @@ struct LiveView: View {
         model.select(.graph)
     }
 
+    private var gearText: String { model.readings.gear > 0 ? String(model.readings.gear) : "N" }
+
     private var milBanner: some View {
-        Button { model.select(.codes) } label: {
+        let shape = skinShape(DS.p.cornerRadius)
+        return Button { model.select(.codes) } label: {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     HStack(spacing: 10) {
-                        DS.accent.frame(width: 8, height: 8)
+                        skinShape(DS.p.pills ? 4 : 0).fill(DS.accent).frame(width: 8, height: 8)
                         Text("Check engine · \(model.codes.count) code\(model.codes.count > 1 ? "s" : "")")
                             .font(DS.body(14))
                     }
@@ -46,21 +58,88 @@ struct LiveView: View {
                 .foregroundStyle(DS.accent800)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                Rule()
+                Rule(color: DS.separator)
             }
         }
         .buttonStyle(FlatButtonStyle(background: DS.accent100, pressed: DS.accent200))
+        .clipShape(shape)
+        // Simple: an inset rounded card (`--skin-mil-m: 12px 16px 0`)
+        .padding(.horizontal, DS.p.cornerRadius > 0 ? 16 : 0)
+        .padding(.top, DS.p.cornerRadius > 0 ? 12 : 0)
     }
 
     // Racing skin: Type R rev bar with the gear in the middle (replaces dial / bar).
     private var racingGauge: some View {
         Button { graph(.rpm) } label: {
             TypeRGauge(rpm: rpm ?? 0, rpmText: rpmText, peakText: peakText,
-                       gear: model.readings.gear > 0 ? String(model.readings.gear) : "N",
+                       gear: gearText,
                        speedText: fmt.value(.speed, model.readings[.speed]), speedUnit: fmt.unit(.speed),
                        rpmColor: rpmColor)
         }
         .buttonStyle(FlatButtonStyle(pressed: DS.text.opacity(0.04)))
+    }
+
+    // Power skin: twin speed / rpm gauges with the gear in the right one.
+    private var powerGauge: some View {
+        Button { graph(.rpm) } label: {
+            PowerGauge(rpm: rpm ?? 0, rpmText: rpmText, peakText: peakText, gear: gearText,
+                       speed: fmt.convert(.speed, model.readings[.speed] ?? 0),
+                       speedText: fmt.value(.speed, model.readings[.speed]), speedUnit: fmt.unit(.speed),
+                       imperial: fmt.units == .imperial, rpmColor: rpmColor)
+        }
+        .buttonStyle(FlatButtonStyle(pressed: DS.text.opacity(0.04)))
+    }
+
+    // Simple skin default: speed in a 270° rpm ring on a rounded card, gear and peak rpm below.
+    private var ringColor: Color { (rpm ?? 0) > 6000 ? Color(hex: 0xFF645F) : DS.accent }
+
+    private var rpmRing: some View {
+        Button { graph(.rpm) } label: {
+            ZStack {
+                RpmRing(fraction: min(max((rpm ?? 0) / 7000, 0), 1), color: ringColor)
+                    .frame(width: 280, height: 280)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 10)
+                VStack(spacing: 0) {
+                    Text(fmt.unit(.speed).uppercased())
+                        .font(DS.label(12, medium: true))
+                        .tracking(0.96)
+                        .foregroundStyle(DS.neutral700)
+                    Text(fmt.value(.speed, model.readings[.speed]))
+                        .font(DS.headingSemi(104))
+                        .tracking(-3.12)
+                        .monospacedDigit()
+                        .frame(height: 99)
+                    Text("\(rpmText) rpm")
+                        .font(DS.label(15, medium: true))
+                        .monospacedDigit()
+                        .foregroundStyle(ringColor)
+                }
+                .offset(y: -6)
+                HStack(alignment: .bottom) {
+                    ringStat("Gear", gearText, alignment: .leading)
+                    Spacer()
+                    ringStat("Peak rpm", peakText, alignment: .trailing)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 300)
+            .contentShape(skinShape(20))
+        }
+        .buttonStyle(CardButtonStyle(radius: 20, background: DS.surface, pressed: DS.neutral200))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func ringStat(_ label: String, _ value: String, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(label.uppercased()).font(DS.label(11)).foregroundStyle(DS.neutral700)
+            Text(value).font(DS.headingSemi(28)).monospacedDigit()
+        }
     }
 
     // 2a: analog tachometer centred, the number under it, Peak and Gear below.
@@ -87,7 +166,7 @@ struct LiveView: View {
                 HStack(spacing: 0) {
                     stat("Peak", peakText).padding(.leading, 16)
                     DS.divider.frame(width: 1)
-                    stat("Gear", model.readings.gear > 0 ? String(model.readings.gear) : "N").padding(.leading, 14)
+                    stat("Gear", gearText).padding(.leading, 14)
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -150,6 +229,53 @@ struct LiveView: View {
                 Rule(weight: 1)
             }
         }
+    }
+
+    // Simple: each reading on its own rounded card with a range bar, 10pt apart.
+    private var cards: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(Channel.cells, id: \.self) { card($0) }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func card(_ key: ChannelKey) -> some View {
+        let raw = model.readings[key]
+        let color = fmt.isWarning(key, raw) ? DS.accent : DS.text
+        let c = key.info
+        let fraction = raw.map { min(max(($0 - c.min) / (c.max - c.min), 0), 1) } ?? 0
+        return Button { graph(key) } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(c.label.uppercased()).foregroundStyle(DS.neutral700)
+                    Spacer(minLength: 4)
+                    Text(c.pidLabel.uppercased()).foregroundStyle(DS.neutral500)
+                }
+                .font(DS.label(10))
+                .tracking(0.8)
+                .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(fmt.value(key, raw))
+                        .font(DS.heading(30))
+                        .tracking(-0.6)
+                        .monospacedDigit()
+                        .foregroundStyle(color)
+                    Text(fmt.unit(key)).font(DS.body(13)).foregroundStyle(DS.neutral700)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(DS.neutral300)
+                        Capsule().fill(color).frame(width: geo.size.width * fraction)
+                    }
+                }
+                .frame(height: 4)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .contentShape(skinShape(DS.p.cornerRadius))
+        }
+        .buttonStyle(CardButtonStyle(radius: DS.p.cornerRadius, background: DS.surface, pressed: DS.text.opacity(0.1)))
     }
 
     private func cell(_ key: ChannelKey) -> some View {
@@ -231,6 +357,45 @@ struct Tachometer: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The Ring gauge (`ringStyle` in OBD Prototype.dc.html), in its 280-unit viewBox: a 14pt track over
+/// 270° from the lower left, the 6000–7000 rpm zone tinted red, and the value arc with round caps.
+struct RpmRing: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            let s = size.width / 280
+            ctx.scaleBy(x: s, y: s)
+            var arc = Path()
+            arc.addArc(center: CGPoint(x: 140, y: 140), radius: 120, startAngle: .degrees(135), endAngle: .degrees(405), clockwise: false)
+            let round = StrokeStyle(lineWidth: 14, lineCap: .round)
+            ctx.stroke(arc, with: .color(DS.neutral300), style: round)
+            ctx.stroke(arc.trimmedPath(from: 6.0 / 7.0, to: 1), with: .color(Color(hex: 0xF75D59).opacity(0.45)), lineWidth: 14)
+            if fraction > 0 {
+                ctx.stroke(arc.trimmedPath(from: 0, to: fraction), with: .color(color), style: round)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Rounded, filled button background with a pressed fill (Live cards and the Ring gauge).
+struct CardButtonStyle: ButtonStyle {
+    let radius: CGFloat
+    let background: Color
+    let pressed: Color
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                ZStack {
+                    skinShape(radius).fill(background)
+                    skinShape(radius).fill(configuration.isPressed ? pressed : .clear)
+                }
+            }
     }
 }
 

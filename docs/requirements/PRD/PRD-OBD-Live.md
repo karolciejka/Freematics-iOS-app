@@ -65,7 +65,7 @@ Later, not now: owners of other Bluetooth LE OBD-II adapters, and people who wan
 
 ### 7.1 UX
 
-Five screens, each in two looks (Simple and Racing): Connect, Live, Graph, Codes and CAN bus. Screenshots are in the README and are made automatically by the Screenshots workflow. Key flow: plug in the logger, turn on the ignition, tap Connect, see live readings within seconds.
+Five screens, each in three looks (Simple, Racing and Power): Connect, Live, Graph, Codes and CAN bus. Screenshots are in the README and are made automatically by the Screenshots workflow. Key flow: plug in the logger, turn on the ignition, tap Connect, see live readings within seconds.
 
 ### 7.2 Key features for the first public version
 

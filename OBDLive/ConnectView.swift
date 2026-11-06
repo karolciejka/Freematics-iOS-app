@@ -66,9 +66,9 @@ private struct ConnectContent: View {
                             Text("→")
                         }
                     }
-                    .buttonStyle(PrimaryButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle(radius: 14))
                     Button("Use demo data", action: model.connectDemo)
-                        .buttonStyle(SecondaryButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle(radius: 14))
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -155,7 +155,7 @@ private struct ConnectContent: View {
 }
 
 /// Photo of the Freematics ONE+ logger on the connect screen, as in the design: the whole photo on a
-/// fixed light grey box (in both skins), printed in grayscale and multiplied so its white background
+/// fixed light grey box with 16pt corners (in every skin), printed in grayscale and multiplied so its white background
 /// melts into the box. Falls back to the striped placeholder if the "PortPhoto" asset is missing.
 struct PortPhoto: View {
     var body: some View {
@@ -189,7 +189,7 @@ struct PortPhoto: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .clipped()
-        .overlay(Rectangle().strokeBorder(DS.divider, lineWidth: 1))
+        .clipShape(skinShape(16))
+        .overlay(skinShape(16).strokeBorder(DS.divider, lineWidth: 1))
     }
 }

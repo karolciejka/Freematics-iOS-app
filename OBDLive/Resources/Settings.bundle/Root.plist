@@ -5,6 +5,8 @@
 	<key>PreferenceSpecifiers</key>
 	<array>
 		<dict>
+			<key>FooterText</key>
+			<string>The engine speed style applies to the Simple skin. Racing and Power have their own gauges.</string>
 			<key>Title</key>
 			<string>Display</string>
 			<key>Type</key>
@@ -21,6 +23,7 @@
 			<array>
 				<string>Simple</string>
 				<string>Racing</string>
+				<string>Power</string>
 			</array>
 			<key>Type</key>
 			<string>PSMultiValueSpecifier</string>
@@ -28,17 +31,19 @@
 			<array>
 				<string>Simple</string>
 				<string>Racing</string>
+				<string>Power</string>
 			</array>
 		</dict>
 		<dict>
 			<key>DefaultValue</key>
-			<string>Dial</string>
+			<string>Ring</string>
 			<key>Key</key>
 			<string>rpmStyle</string>
 			<key>Title</key>
 			<string>Engine speed</string>
 			<key>Titles</key>
 			<array>
+				<string>Ring</string>
 				<string>Dial</string>
 				<string>Bar</string>
 			</array>
@@ -46,6 +51,7 @@
 			<string>PSMultiValueSpecifier</string>
 			<key>Values</key>
 			<array>
+				<string>Ring</string>
 				<string>Dial</string>
 				<string>Bar</string>
 			</array>

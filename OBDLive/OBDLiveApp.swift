@@ -21,7 +21,11 @@ struct RootView: View {
         let _ = DS.use(skin)
         ZStack {
             DS.bg.ignoresSafeArea()
-            if skin.palette.textured { CarbonTexture().ignoresSafeArea() }
+            switch skin.palette.texture {
+            case .carbon: CarbonTexture().ignoresSafeArea()
+            case .power: PowerTexture().ignoresSafeArea()
+            case .none: EmptyView()
+            }
             switch model.screen {
             case .connect: ConnectView()
             case .app: AppShellView()
@@ -31,6 +35,6 @@ struct RootView: View {
         .font(DS.body(15))
         // every view reads the active skin's tokens, so rebuild the tree when it changes
         .id(skin)
-        .preferredColorScheme(skin.palette.dark ? .dark : .light)
+        .preferredColorScheme(.dark)
     }
 }
